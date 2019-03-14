@@ -5,6 +5,10 @@ def weight_variable(shape):
     return tf.get_variable(name='W', shape=shape, initializer=tf.contrib.layers.xavier_initializer())
 
 
+def weight_variable_devonc(shape):
+    return tf.get_variable(name='W', shape=shape, initializer=tf.contrib.layers.xavier_initializer())
+
+
 def bias_variable(shape):
     return tf.Variable(tf.constant(0., shape=shape))
 
@@ -23,12 +27,12 @@ def deconv3d(x, w, name, s=1, pd='SAME'):
 
 def conv(x, k, in_ch, out_ch, stride, dr, name, activation=None):
     """
-    :param tf.Tensor x: input tensor
+    :param x: input tensor
     :param int k: kernel size
     :param int in_ch: number of input channels
     :param int out_ch: number of output channels
     :param int stride: stride of convolution
-    :param dr: dropout rate (probability of keeping the node)
+    :param float dr: dropout rate (probability of keeping the node)
     :param str name: name applied to layer
     :param activation: activation function
     :return:

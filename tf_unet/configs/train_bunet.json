@@ -1,0 +1,30 @@
+{
+	"model": {
+		"nb_ch": 4,
+		"nb_kers": 32,
+		"nb_mc": 10,
+		"wd": 0.0001,
+		"dr": 0.5,
+		"optimizer": "adam",
+		"lr": 0.0002,
+		"lr_decay": 0.995,
+		"loss_fn": "weighted_xentropy",
+		"depth": 4
+	},
+	"expt": {
+		"mslaq_data_path": "/cim/data/mslaq_raw/tf_mslaq/mslaq.tfrecord",
+		"ascend_data_path": "/cim/data/mslaq_raw/tf_ascend/ascend.tfrecord",
+		"restore_path": "/cim/data/mslaq_raw/checkpoint",
+		"steps_per_epoch": 70,
+		"nb_val_steps": 20,
+		"nb_epochs": 5,
+		"batch_size": 2,
+		"cw": {
+			"start": 5,
+			"stop": 3,
+			"decay": 1 
+		},
+		"viz": 1,
+		"shuffle": 1
+	}
+}

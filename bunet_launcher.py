@@ -1,6 +1,6 @@
-from bunet.data.tfr_data_provider import BrainVolumeDataProvider as DataProvider
-from bunet.models.bunet import BUnet
-from bunet.training.train_tfr import Trainer
+from tf_unet.data.tfr_data_provider import BrainVolumeDataProvider as DataProvider
+from tf_unet.models.bunet import BUnet
+from tf_unet.training.train_tfr import Trainer
 from argparse import ArgumentParser
 from shutil import copy
 import json
@@ -19,20 +19,23 @@ def main(args):
     net = BUnet(nb_ch=model_cfg['nb_ch'],
                 nb_kers=model_cfg['nb_kers'],
                 nb_mc=model_cfg['nb_mc'],
+                depth=model_cfg['depth'],
                 weight_decay=model_cfg['wd'],
+                loss_fn=model_cfg['loss_fn'],
                 batch_size=expt_cfg['batch_size'])
 
-    train_ds = DataProvider(expt_cfg['data_path'],
+    train_ds = DataProvider(expt_cfg['mslaq_data_path'],expt_cfg['ascend_data_path'],
                             {'mode': 'train', 'shuffle': True if expt_cfg['shuffle'] is 1 else False})
-    valid_ds = DataProvider(expt_cfg['data_path'], {'mode': 'valid', 'shuffle': False})
+    valid_ds = DataProvider(expt_cfg['mslaq_data_path'],expt_cfg['ascend_data_path'], {'mode': 'valid', 'shuffle': False})
     train_gen = train_ds.get_generator(expt_cfg['batch_size'], expt_cfg['nb_epochs'])
     valid_gen = valid_ds.get_generator(expt_cfg['batch_size'], expt_cfg['nb_epochs'])
 
     trainer = Trainer(net,
+                      optimizer=model_cfg['optimizer'],
                       opt_kwargs={'lr': model_cfg['lr'], 'decay': model_cfg['lr_decay']},
                       batch_size=expt_cfg['batch_size'])
 
-    trainer.train(train_gen,
+    path = trainer.train(train_gen,
                          valid_gen,
                          nb_val_steps=expt_cfg['nb_val_steps'],
                          output_path=out_dir,
@@ -55,3 +58,8 @@ def _parser():
 
 if __name__ == '__main__':
     main(_parser().parse_args())
+
+'''
+python bunet_launcher.py -o /usr/local/data/thomasc/checkpoints/bunet_checkpoint/ -c /usr/local/data/thomasc/checkpoints/train_bunet.json
+python3 bunet_launcher.py -o /cim/data/mslaq_raw/checkpoint -c /cim/data/mslaq_raw/tf_unet/tf_unet/configs/train_bunet.json 
+'''
