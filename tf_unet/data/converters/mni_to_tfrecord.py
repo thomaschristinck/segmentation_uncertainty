@@ -6,9 +6,9 @@ from timeit import default_timer as timer
 import nibabel as nib
 import sys
 
-DEFAULT_DATA_DIR = 'usr/local/data/thomasc/mni-resample/MNI-resampled'   #'/cim/data/neurorx/MS-LAQ-302-STX/imaging_data' '/cim/data/neurorx/MS-LAQ-302-STX/imaging_data' 
-IMG_TAG = "_icbm.mnc"
-LES_TAG = "_ct2f_icbm.mnc"
+DEFAULT_DATA_DIR = '/usr/local/data/thomasc/mni-resample/data_processed'   #'/cim/data/neurorx/MS-LAQ-302-STX/imaging_data' '/cim/data/neurorx/MS-LAQ-302-STX/imaging_data' 
+IMG_TAG = "_icbm_p.mnc"
+LES_TAG = "_ct2f_icbm_p.mnc"
 DEFAULT_TPS = ['m0', 'm12', 'm24', 'baseline', 'screening', 'w48', 'w96']
 MODALITIES = ['t1p', 't2w', 'flr', 'pdw']
 
@@ -21,7 +21,7 @@ class Converter:
         self._data_dir = data_dir
         self._img_dtype = img_dtype
         self._label_dtype = label_dtype
-        self._data_shape = [60, 256, 256]
+        self._data_shape = [64, 229, 193]
 
     @staticmethod
     def _bytes_feature(x):
@@ -35,12 +35,12 @@ class Converter:
         shape = {0: self._int64_feature(self._data_shape[0]),
                  1: self._int64_feature(self._data_shape[1]),
                  2: self._int64_feature(self._data_shape[2])}
-
         writer = tf.python_io.TFRecordWriter(self._tfrecord)#,
                                              #options=tf.python_io.TFRecordOptions(tf.python_io.TFRecordCompressionType.GZIP))
 
         # List all subjects except those from ascend
         subjs = [i for i in listdir(self._data_dir) if not i.startswith('101')]
+        
         tps = [[subj,tp] for subj in subjs for tp in listdir(join(self._data_dir,subj)) if '.scannerdb' not in tp]
         count = 0
         start = timer()
@@ -60,10 +60,10 @@ class Converter:
                     if subj.startswith('MS-LAQ'):
                         save_subj = '1' + subj[15:21]
                     elif subj.startswith('109'):
-                        save_subj = '2' + subj[13:16] + subj[17:20]
+                        save_subj = '2' + subj[17:20] + subj[21:24]
                     elif subj.startswith('MBP'):
                         save_subj = '3' + subj[18:21] + subj[22:25]
-                    else
+                    else:
                         raise Error('Unknown subject type (unknown trial): ' + subj)
 
                     if np.all([exists(ct2f_pth), exists(flr_pth), exists(pdw_pth), exists(t1c_pth), exists(t2w_pth)]):
@@ -71,16 +71,20 @@ class Converter:
                             subj_list.append(save_subj)
                             first_time = False
                         data = []
-                        for m in MODALITIES:
-                            img = nib.load(join(self._data_dir,subj,tp,subj+"_"+tp+"_"+m+IMG_TAG)).get_data().astype(np.float32)
-                            img = (img-img.min()) / (NORM_CONSTANTS[m]['max']-img.min())
-                            img = np.clip(img,0.0,1.0)
-                            data.append(img)
-                        data = np.asarray(data, self._img_dtype)
-                        label = np.expand_dims(nib.load(join(self._data_dir,subj,tp,subj+"_"+tp+LES_TAG)).get_data().astype(self._label_dtype),0)
+                        try:
+                            for m in MODALITIES:
+                                img = nib.load(join(self._data_dir,subj,tp,subj+"_"+tp+"_"+m+IMG_TAG)).get_data().astype(np.float32)
+                                img = (img-img.min()) / (img.max()-img.min())
+                                img = np.clip(img,0.0,1.0)
+                                data.append(img)
+                            data = np.asarray(data, self._img_dtype)
+                            label = np.expand_dims(nib.load(join(self._data_dir,subj,tp,subj+"_"+tp+LES_TAG)).get_data().astype(self._label_dtype),0)
 
-                        assert data.shape == (4,60,256,256), print("{} is not the right data shape".format(data.shape))
-                        assert label.shape == (1,60,256,256), print("{} is not the right data shape".format(label.shape))
+                            assert data.shape == (4,64,229,193), print("{} is not the right data shape".format(data.shape))
+                            assert label.shape == (1,64,229,193), print("{} is not the right data shape".format(label.shape))
+                        except:
+                            print("Issue with loading: ", join(self._data_dir,subj,tp,subj+"_"+tp+"_"+m+IMG_TAG))
+
                         if (count+1) % 100 ==  0:
                             print('{} images complete {:.2f}m'.format(count+1,(timer()-start)/60) )
                         count += 1
@@ -95,15 +99,17 @@ class Converter:
 
                         data_raw = data.tostring()
                         label_raw = label.tostring()
-                        example = tf.train.Example(features=tf.train.Features(feature={
-                            'dim0': shape[0],
-                            'dim1': shape[1],
-                            'dim2': shape[2],
-                            'subj': self._int64_feature(int(save_subj)),
-                            'time_point': self._int64_feature(int(save_tp)),
-                            'img': self._bytes_feature(data_raw),
-                            'label': self._bytes_feature(label_raw)}))
-
+                        try:
+                            example = tf.train.Example(features=tf.train.Features(feature={
+                                'dim0': shape[0],
+                                'dim1': shape[1],
+                                'dim2': shape[2],
+                                'subj': self._int64_feature(int(save_subj)),
+                                'time_point': self._int64_feature(int(save_tp)),
+                                'img': self._bytes_feature(data_raw),
+                                'label': self._bytes_feature(label_raw)}))
+                        except:
+                            print(subj)
                         writer.write(example.SerializeToString())
   
         subj_array = np.asarray(subj_list)
