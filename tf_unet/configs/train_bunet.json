@@ -12,12 +12,12 @@
 		"depth": 4
 	},
 	"expt": {
-		"mslaq_data_path": "/cim/data/mslaq_raw/tf_mslaq/mslaq.tfrecord",
-		"ascend_data_path": "/cim/data/mslaq_raw/tf_ascend/ascend.tfrecord",
-		"restore_path": "/cim/data/mslaq_raw/checkpoint",
+		"mslaq_data_path": "/usr/local/data/thomasc/mni-resample/outputs/mni_resample.tfrecord",
+		"ascend_data_path": "/usr/local/data/thomasc/mni-resample/outputs/mni_resample.tfrecord",
+		"restore_path": "",
 		"steps_per_epoch": 70,
 		"nb_val_steps": 20,
-		"nb_epochs": 5,
+		"nb_epochs": 100,
 		"batch_size": 2,
 		"cw": {
 			"start": 5,

@@ -97,8 +97,12 @@ class Converter:
                         else:
                             save_tp = tp[1:]
 
-                        data_raw = data.tostring()
-                        label_raw = label.tostring()
+                        try:
+                            data_raw = data.tostring()
+                            label_raw = label.tostring()
+                        except:
+                            print("Error converting to string for subject: ", subj)
+                            
                         try:
                             example = tf.train.Example(features=tf.train.Features(feature={
                                 'dim0': shape[0],

@@ -24,9 +24,9 @@ def main(args):
                 loss_fn=model_cfg['loss_fn'],
                 batch_size=expt_cfg['batch_size'])
 
-    train_ds = DataProvider(expt_cfg['mslaq_data_path'],expt_cfg['ascend_data_path'],
+    train_ds = DataProvider(expt_cfg['mslaq_data_path'],
                             {'mode': 'train', 'shuffle': True if expt_cfg['shuffle'] is 1 else False})
-    valid_ds = DataProvider(expt_cfg['mslaq_data_path'],expt_cfg['ascend_data_path'], {'mode': 'valid', 'shuffle': False})
+    valid_ds = DataProvider(expt_cfg['mslaq_data_path'], {'mode': 'valid', 'shuffle': False})
     train_gen = train_ds.get_generator(expt_cfg['batch_size'], expt_cfg['nb_epochs'])
     valid_gen = valid_ds.get_generator(expt_cfg['batch_size'], expt_cfg['nb_epochs'])
 
@@ -60,6 +60,9 @@ if __name__ == '__main__':
     main(_parser().parse_args())
 
 '''
-python bunet_launcher.py -o /usr/local/data/thomasc/checkpoints/bunet_checkpoint/ -c /usr/local/data/thomasc/checkpoints/train_bunet.json
+python bunet_launcher.py -o /usr/local/data/thomasc/bunet_checkpoints/checkpoint_feb19_ab -c /usr/local/data/thomasc/bunet_checkpoints/checkpoint_feb19_ab/train_bunet.json
 python3 bunet_launcher.py -o /cim/data/mslaq_raw/checkpoint -c /cim/data/mslaq_raw/tf_unet/tf_unet/configs/train_bunet.json 
 '''
+
+# restore path for config:
+#/usr/local/data/thomasc/bunet_checkpoints/checkpoint_feb19_ab
