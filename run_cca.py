@@ -10,7 +10,7 @@ from shutil import copy
 import tensorflow as tf
 
 def main(args):
-    sess= tf.Session()
+    #sess= tf.Session()
     '''
     h5_path = args.data
     for i in ['train_img', 'val_img', 'test_img', 'all_img']:
@@ -35,7 +35,7 @@ def main(args):
     #test_ds = DataProvider(h5_path, {'mode': 'test', 'shuffle': False, 'modalities': [0, 1, 2, 3]})
     #full_ds = DataProvider(h5_path, {'mode': 'all', 'shuffle': False, 'modalities': [0,1,2,3]})
     #test_ds = DataProvider(expt_cfg['mslaq_data_path'],expt_cfg['ascend_data_path'], {'mode': 'nontrain', 'shuffle': False})
-    test_ds = DataProvider(expt_cfg['mslaq_data_path'],expt_cfg['ascend_data_path'], {'mode': 'test', 'shuffle': False})
+    test_ds = DataProvider(expt_cfg['mslaq_data_path'], {'mode': 'test', 'shuffle': False})
 
     # Generate examples for model evaluation
     #train_gen = train_ds.get_test_generator(1)
@@ -57,14 +57,17 @@ def main(args):
 
     #train_analyzer = Analyzer(net, args.checkpoint_path, train_gen, join(out_dir, 'train_img'), nb_mc=10)
     #valid_analyzer = Analyzer(net, args.checkpoint_path, valid_gen, join(out_dir, 'valid_img'), nb_mc=10)
-    #test_analyzer = Analyzer(net, args.checkpoint_path, test_gen, join(out_dir, 'test_img'), nb_mc=2)
+    test_analyzer = Analyzer(net, args.checkpoint_path, test_gen, join(out_dir, 'test_img'), nb_mc=2)
     #full_analyzer = Analyzer(net, args.checkpoint_path, full_gen, join(out_dir, '3d_all_img_small'), nb_mc=10)
-    full_analyzer = Analyzer(net, args.checkpoint_path, test_gen, out_dir, nb_mc=10)
+    #full_analyzer = Analyzer(net, args.checkpoint_path, test_gen, out_dir, nb_mc=10)
 
     #train_analyzer.cca('train_stats_thresh{}.csv'.format(sigmoid_thresh), sigmoid_thresh)
     #valid_analyzer.cca('valid_stats_thresh{}.csv'.format(sigmoid_thresh), sigmoid_thresh)
     #test_analyzer.cca('test_stats_thresh{}.csv'.format(sigmoid_thresh), sigmoid_thresh)
-    full_analyzer.write_to_nrrd(out_dir, sess)
+    thresh = [0.0001, 0.001, 0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.99, 0.999, 1.0, 1.1]
+    out_file = 'roc.csv'
+
+    test_analyzer.roc(out_file, thresh)
 
 
 def _parser():
@@ -85,6 +88,7 @@ With hdf5 loader on local machine:
 python run_cca.py -i /usr/local/data/tnair/thesis/mslaq_brains_edss_gz.hdf5 -c /usr/local/data/thomasc/checkpoints/bunet_checkpoint -o /usr/local/data/thomasc/unet_out/
 With tfrecord on local machine:
 python run_cca.py -p /usr/local/data/thomasc/checkpoints/bunet_checkpoint -o /usr/local/data/thomasc/test_ops -c /usr/local/data/thomasc/checkpoints/train_bunet.json
+python run_cca.py -p /usr/local/data/thomasc/checkpoint -o /usr/local/data/thomasc/checkpoint/roc -c ~/Desktop/segmentation_uncertainty/tf_unet/configs/train_bunet.json
 DGX Usage:
 python3 run_cca.py -p /cim/data/mslaq_raw/checkpoint -o /cim/data/mslaq_raw/outputs -c /cim/data/mslaq_raw/tf_unet/tf_unet/configs/train_bunet.json 
 '''

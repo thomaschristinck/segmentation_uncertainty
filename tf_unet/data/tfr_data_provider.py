@@ -26,8 +26,13 @@ class BrainDataProvider:
 
         # Load numpy files containing list of subject names
         self._subjects = np.load(config.get('mni_resample_list', '/usr/local/data/thomasc/mni-resample/outputs/mni_resample_list.npy'))#'/cim/data/mslaq_raw/tf_mslaq/mslaq.npy')) #
-        #self._subjects = list(map(int, self._subjects))
         random.shuffle(self._subjects)
+
+        total_list = list(self._subjects)
+        train_subjects = np.load('/usr/local/data/thomasc/train.npy')
+        train_list = list(train_subjects)
+        test_list = [s for s in total_list if s not in train_list]
+        print('test list length: ', len(test_list))
 
         nb_train = round(len(self._subjects) * 0.4)
         nb_valid = round(len(self._subjects) * 0.1)
@@ -40,7 +45,8 @@ class BrainDataProvider:
         elif self._mode == 'valid':
             non_train_array = np.asarray(self._subjects[nb_train:nb_train + nb_valid])
         elif self._mode == 'test':
-            self._subjects = self._subjects[nb_train + nb_valid:]
+            #self._subjects = self._subjects[nb_train + nb_valid:]
+            self._subjects = np.asarray(test_list)
         self._subjects = tf.constant(np.asarray(self._subjects, np.int32))
     def __len__(self):
         return len(self._subjects)
@@ -121,5 +127,6 @@ class BrainVolumeDataProvider(BrainDataProvider):
         dataset = dataset.repeat(nb_epochs)
         dataset = dataset.batch(batch_size)
         dataset = dataset.prefetch(50)
-        iterator = dataset.make_initializable_iterator()
+        iterator = dataset.make_one_shot_iterator()
+    
         return iterator

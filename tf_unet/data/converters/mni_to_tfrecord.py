@@ -12,9 +12,6 @@ LES_TAG = "_ct2f_icbm_p.mnc"
 DEFAULT_TPS = ['m0', 'm12', 'm24', 'baseline', 'screening', 'w48', 'w96']
 MODALITIES = ['t1p', 't2w', 'flr', 'pdw']
 
-NORM_CONSTANTS = {'t1p':{'max': 1020.0050537880522},'t2w':{'max': 1016.9968841077286},
-                  'flr':{'max': 1014.9998077363241},'pdw':{'max': 1016.9996490424962}}
-
 class Converter:
     def __init__(self, tfrecord, data_dir=DEFAULT_DATA_DIR, img_dtype=np.float32, label_dtype=np.int16):
         self._tfrecord = tfrecord
@@ -102,7 +99,7 @@ class Converter:
                             label_raw = label.tostring()
                         except:
                             print("Error converting to string for subject: ", subj)
-                            
+
                         try:
                             example = tf.train.Example(features=tf.train.Features(feature={
                                 'dim0': shape[0],

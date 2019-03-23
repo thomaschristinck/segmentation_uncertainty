@@ -7,6 +7,7 @@ import numpy as np
 import nrrd
 from tf_unet.utils.np_utils import sigmoid
 from tf_unet.utils.unc_metrics import mi_uncertainty, entropy, prd_variance, prd_uncertainty
+import os
 from os.path import join
 
 from pprint import pprint
@@ -52,6 +53,8 @@ class BunetAnalyzer:
         with tf.Session() as sess:
 
             self.__model.restore(sess, tf.train.latest_checkpoint(self.__model_checkpoint))
+            if not os.path.isdir(self.__out_dir):
+                os.makedir(self.__out_dir)
             with open(join(self.__out_dir, out_file), 'w', newline='') as csvfile:
                 stats_writer = csv.writer(csvfile, delimiter=',')
                 stats_writer.writerow(['subj', 'tp', 'mean_fdr', 'mean_tpr', 'mean_dice'])
@@ -78,17 +81,159 @@ class BunetAnalyzer:
                     ['mean_subj', '_', ustats['fdr'] / nb_subj, ustats['tpr'] / nb_subj, ustats['dice'] / nb_subj])
         print("completed in {:.2f}m".format((timer() - start) / 60))
 
-    def roc(self, out_file, thresh_start, thresh_stop, thresh_step):
-        with tf.Session() as sess:
-            self.__model.restore(sess, tf.train.latest_checkpoint(self.__model_checkpoint))
+    def cca_img_no_unc(h, t, th):
+        """
+        Connected component analysis of between prediction `h` and ground truth `t` across lesion bin sizes.
+        Lesion counting algorithm:
+            for lesion in ground_truth:
+                See if there is overlap with a detected lesion
+                nb_overlap = number of overlapping voxels with prediction
+                if nb_overlap >= 3 or nb_overlap >= 0.5 * lesion_size:
+                     lesion is a true positive
+                else:
+                     lesion is a false negative
+            for lesion in prediction:
+                if lesion isn't associated with a true positive:
+                    lesion is a false positive
+        Important!!
+            h and t should be in their image shape, ie. (256, 256, 64)
+                and NOT in a flattened shape, ie. (4194304, 1, 1)
+        :param h: network output on range [0,1], shape=(NxMxO)
+        :type h: float16, float32, float64
+        :param t: ground truth labels, shape=(NxMxO)
+        :type t: int16
+        :param th: threshold to binarize prediction `h`
+        :type th: float16, float32, float64
+        :return: dict
+        """
+        h[h >= th] = 1
+        h[h < th] = 0
+        h = h.astype(np.int16)
+
+        t = remove_tiny_les(t, nvox=2)
+        h0 = h.copy()
+        h = ndimage.binary_dilation(h, structure=ndimage.generate_binary_structure(3, 2))
+
+        labels = {}
+        nles = {}
+        labels['h'], nles['h'] = ndimage.label(h)
+        labels['t'], nles['t'] = ndimage.label(t)
+        found_h = np.ones(nles['h'], np.int16)
+        ntp = {'all': 0, 'small': 0, 'med': 0, 'large': 0}
+        nfp = {'all': 0, 'small': 0, 'med': 0, 'large': 0}
+        nfn = {'all': 0, 'small': 0, 'med': 0, 'large': 0}
+        nb_les = {'all': 0, 'small': 0, 'med': 0, 'large': 0}
+        nles_gt = {'all': nles['t'], 'small': 0, 'med': 0, 'large': 0}
+        for i in range(1, nles['t'] + 1):
+            lesion_size = np.sum(t[labels['t'] == i])
+            nles_gt[get_lesion_bin(lesion_size)] += 1
+            # list of detected lesions in this area
+            h_lesions = np.unique(labels['h'][labels['t'] == i])
+            # all the voxels in this area contribute to detecting the lesion
+            nb_overlap = h[labels['t'] == i].sum()
+            if nb_overlap >= 3 or nb_overlap >= 0.5 * lesion_size:
+                nb_les[get_lesion_bin(lesion_size)] += 1
+                ntp[get_lesion_bin(lesion_size)] += 1
+                for h_lesion in h_lesions:
+                    if h_lesion != 0:
+                        found_h[h_lesion - 1] = 0
+            else:
+                nfn[get_lesion_bin(lesion_size)] += 1
+
+        for i in range(1, nles['h'] + 1):
+            if found_h[i - 1] == 1:
+                nb_vox = np.sum(h0[labels['h'] == i])
+                nfp[get_lesion_bin(nb_vox)] += 1
+
+        nb_les['all'] = nb_les['small'] + nb_les['med'] + nb_les['large']
+        ntp['all'] = ntp['small'] + ntp['med'] + ntp['large']
+        nfp['all'] = nfp['small'] + nfp['med'] + nfp['large']
+        nfn['all'] = nfn['small'] + nfn['med'] + nfn['large']
+
+        tpr = {}
+        fdr = {}
+        for s in ntp.keys():
+            # tpr (sensitivity)
+            if nles_gt[s] != 0:
+                tpr[s] = ntp[s] / nles_gt[s]
+            elif nles_gt[s] == 0 and ntp[s] == 0:
+                tpr[s] = 1
+            else:
+                tpr[s] = 0
+            # ppv (1-fdr)
+            if ntp[s] + nfp[s] != 0:
+                ppv = ntp[s] / (ntp[s] + nfp[s])
+            elif ntp[s] == 0:
+                ppv = 1
+            else:
+                ppv = 0
+            fdr[s] = 1 - ppv
+
+        return {'ntp': ntp, 'nfp': nfp, 'nfn': nfn, 'fdr': fdr, 'tpr': tpr, 'nles': nb_les, 'nles_gt': nles_gt}
+
+
+    def roc(self, out_file, thresh):
+        
+
+        #subj, tp, x, y = self.__data_gen.get_next()
+        with tf.Session as sess:
+            #self.__model.restore(sess, tf.train.latest_checkpoint(self.__model_checkpoint))
+            tf.global_variables_initializer()
+            element = self.__data_gen.get_next()
+            if not os.path.isdir(self.__out_dir):
+                os.mkdir(self.__out_dir)
+            try:
+                while True:
+                    test = sess.run(element)
+            except tf.errors.OutOfRangeError:
+                pass
             with open(join(self.__out_dir, out_file), 'w', newline='') as csvfile:
                 stats_writer = csv.writer(csvfile, delimiter=',')
                 stats_writer.writerow(['unc_thresh', 'mean_fdr', 'mean_tpr', 'mean_dice'])
                 start = timer()
                 nb_subj = 0
-                thresh = np.arange(thresh_start, thresh_stop, thresh_step)
                 ustats = {}
                 [ustats.update({t: {'fdr': 0, 'tpr': 0, 'dice': 0}}) for t in thresh]
+                print("Length is ", self.__data_gen)
+
+                
+                print(sess.run(element))
+              
+                x_mc = np.repeat(x, self.__nb_mc, 0)
+                print('x shape', tf.shape(x_mc))
+                mu_mcs = sess.run(self.__model.predictor,
+                                      feed_dict={self.__model.x: x_mc, self.__model.keep_prob: 0.5})
+                mu_mcs = np.asarray(mu_mcs, np.float32)[..., 0]
+                ent = entropy(sigmoid(mu_mcs))
+                h = sigmoid(np.mean(mu_mcs, 0))
+                y = y[0, ..., 0]
+                for t in thresh:
+                    h_unc_thresh = self._keep_below_thresh(h, ent, t)
+                    stats = self._get_prd_stats(y, h_unc_thresh)
+                    ustats[t]['fdr'] += stats['fdr']['all']
+                    ustats[t]['tpr'] += stats['tpr']['all']
+                    ustats[t]['dice'] += stats['dice']
+                    nb_subj += 1
+                subj, tp, x, y = self.__data_gen.get_next()
+              
+                subj, tp, x, y = self.__data_gen.get_next()
+                x_mc = np.repeat(x, self.__nb_mc, 0)
+                mu_mcs = sess.run(self.__model.predictor,
+                                      feed_dict={self.__model.x: x_mc, self.__model.keep_prob: 0.5})
+                mu_mcs = np.asarray(mu_mcs, np.float32)[..., 0]
+                ent = entropy(sigmoid(mu_mcs))
+                h = sigmoid(np.mean(mu_mcs, 0))
+                y = y[0, ..., 0]
+                for t in thresh:
+                    h_unc_thresh = self._keep_below_thresh(h, ent, t)
+                    stats = self._get_prd_stats(y, h_unc_thresh)
+                    ustats[t]['fdr'] += stats['fdr']['all']
+                    ustats[t]['tpr'] += stats['tpr']['all']
+                    ustats[t]['dice'] += stats['dice']
+                    nb_subj += 1
+
+                batch_x, batch_y = sess.run([x, y])
+
                 for subj, tp, x, y in self.__data_gen:
                     x_mc = np.repeat(x, self.__nb_mc, 0)
                     mu_mcs = sess.run(self.__model.predictor,
