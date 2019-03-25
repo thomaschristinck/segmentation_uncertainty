@@ -45,6 +45,7 @@ def main(args):
     test_gen = test_ds.get_test_generator()
 
     print('-----------Initializing BUnet------------')
+
     net = BUnet(nb_ch=4,
                 nb_kers=32,
                 nb_mc=5,
@@ -89,6 +90,8 @@ python run_cca.py -i /usr/local/data/tnair/thesis/mslaq_brains_edss_gz.hdf5 -c /
 With tfrecord on local machine:
 python run_cca.py -p /usr/local/data/thomasc/checkpoints/bunet_checkpoint -o /usr/local/data/thomasc/test_ops -c /usr/local/data/thomasc/checkpoints/train_bunet.json
 python run_cca.py -p /usr/local/data/thomasc/checkpoint -o /usr/local/data/thomasc/checkpoint/roc -c ~/Desktop/segmentation_uncertainty/tf_unet/configs/train_bunet.json
+
+(checkpoint can be found on dgx)
 DGX Usage:
 python3 run_cca.py -p /cim/data/mslaq_raw/checkpoint -o /cim/data/mslaq_raw/outputs -c /cim/data/mslaq_raw/tf_unet/tf_unet/configs/train_bunet.json 
 '''

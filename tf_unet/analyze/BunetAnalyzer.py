@@ -176,7 +176,7 @@ class BunetAnalyzer:
         
 
         #subj, tp, x, y = self.__data_gen.get_next()
-        with tf.Session as sess:
+        with tf.Session() as sess:
             #self.__model.restore(sess, tf.train.latest_checkpoint(self.__model_checkpoint))
             tf.global_variables_initializer()
             element = self.__data_gen.get_next()
@@ -184,7 +184,8 @@ class BunetAnalyzer:
                 os.mkdir(self.__out_dir)
             try:
                 while True:
-                    test = sess.run(element)
+                    test, x, y, subj = sess.run(element)
+                    print(test)
             except tf.errors.OutOfRangeError:
                 pass
             with open(join(self.__out_dir, out_file), 'w', newline='') as csvfile:

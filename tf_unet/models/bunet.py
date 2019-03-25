@@ -118,7 +118,7 @@ class BUnet(object):
 
     def __init__(self, nb_ch=3, nb_kers=32, nb_mc=5, weight_decay=None, loss_fn='weighted_xentropy', batch_size=3,
                  depth=6):
-        tf.reset_default_graph()
+        #tf.reset_default_graph()
         # self.summaries = kwargs.get("summaries", True)
 
         self.x = tf.placeholder(tf.float32, shape=[None, None, None, None, nb_ch])
