@@ -43,6 +43,8 @@ def main(args):
     #test_gen = test_ds.get_test_generator(1)
     #full_gen = full_ds.get_test_generator(1)
     test_gen = test_ds.get_test_generator()
+    #nb_subjs = test_ds._length
+    nb_subjs = 100
 
     print('-----------Initializing BUnet------------')
 
@@ -66,9 +68,10 @@ def main(args):
     #valid_analyzer.cca('valid_stats_thresh{}.csv'.format(sigmoid_thresh), sigmoid_thresh)
     #test_analyzer.cca('test_stats_thresh{}.csv'.format(sigmoid_thresh), sigmoid_thresh)
     thresh = [0.0001, 0.001, 0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.99, 0.999, 1.0, 1.1]
-    out_file = 'roc.csv'
+    #out_file = 'roc.csv'
 
-    test_analyzer.roc(out_file, thresh)
+    #test_analyzer.roc(out_file, thresh, nb_subjs)
+    test_analyzer.write_to_nrrd(nb_subjs)
 
 
 def _parser():
@@ -86,7 +89,7 @@ if __name__ == '__main__':
 
 '''
 With hdf5 loader on local machine:
-python run_cca.py -i /usr/local/data/tnair/thesis/mslaq_brains_edss_gz.hdf5 -c /usr/local/data/thomasc/checkpoints/bunet_checkpoint -o /usr/local/data/thomasc/unet_out/
+python run_cca.py -i /usr/local/data/tnair/thesis/mslaq_brains_edss_gz.hdf5 -p /usr/local/data/thomasc/checkpoints/bunet_checkpoint -o /usr/local/data/thomasc/unet_out/
 With tfrecord on local machine:
 python run_cca.py -p /usr/local/data/thomasc/checkpoints/bunet_checkpoint -o /usr/local/data/thomasc/test_ops -c /usr/local/data/thomasc/checkpoints/train_bunet.json
 python run_cca.py -p /usr/local/data/thomasc/checkpoint -o /usr/local/data/thomasc/checkpoint/roc -c ~/Desktop/segmentation_uncertainty/tf_unet/configs/train_bunet.json

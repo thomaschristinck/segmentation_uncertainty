@@ -1,6 +1,6 @@
 import numpy as np
 import logging
-
+import sys
 import tensorflow as tf
 from tf_unet.layers import conv, deconv
 from tf_unet.utils.metrics import dice_coef, generalized_dice_loss, weighted_mc_xentropy, hard_dice
@@ -55,7 +55,7 @@ def build_network(x, dr, nb_ch, nb_kers=32):
                   d5, d5c, d4, d4c, d3, d3c, d2, d2c, d1, d1c, d1c_2])
     print("==========================================\n     Layer Summary")
     for i, c in enumerate(convs):
-        print('     Layer  {}  Output Shape  {}'.format(i, c.get_shape()))
+        print('Layer  {}  Output Shape  {}'.format(i, c.get_shape()))
 
     return d1c, d1c_2, variables
 
@@ -106,7 +106,7 @@ def build_network_4down(x, dr, nb_ch, nb_kers=32):
                   d4, d4c, d3, d3c, d2, d2c, d1, d1c, d1c_2])
     print("==========================================\n     Layer Summary")
     for i, c in enumerate(convs):
-        print('     Layer  {}  Output Shape  {}'.format(i, c.get_shape()))
+        print(' Layer  {}  Output Shape  {}'.format(i, c.get_shape()))
 
     return d1c, d1c_2, variables
 

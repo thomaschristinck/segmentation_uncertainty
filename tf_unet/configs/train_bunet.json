@@ -14,7 +14,7 @@
 	"expt": {
 		"mslaq_data_path": "/usr/local/data/thomasc/mni-resample/outputs/mni_resample.tfrecord",
 		"ascend_data_path": "/usr/local/data/thomasc/mni-resample/outputs/mni_resample.tfrecord",
-		"restore_path": "",
+		"restore_path": "/usr/local/data/thomasc/checkpoint",
 		"steps_per_epoch": 70,
 		"nb_val_steps": 20,
 		"nb_epochs": 100,

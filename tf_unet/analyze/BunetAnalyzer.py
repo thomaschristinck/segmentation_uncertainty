@@ -1,5 +1,6 @@
 from tf_unet.analyze.cca import cca_img_no_unc as cca_img
 from tf_unet.analyze.cca import global_dice
+from tf_unet.utils.metrics import count_lesions
 import tensorflow as tf
 from timeit import default_timer as timer
 import csv
@@ -9,7 +10,7 @@ from tf_unet.utils.np_utils import sigmoid
 from tf_unet.utils.unc_metrics import mi_uncertainty, entropy, prd_variance, prd_uncertainty
 import os
 from os.path import join
-
+import matplotlib.pyplot as plt
 from pprint import pprint
 
 _OPTS = {'space': 'RAS', 'space directions': [(1, 0, 0), (0, 1, 0), (0, 0, 3)]}
@@ -172,7 +173,7 @@ class BunetAnalyzer:
         return {'ntp': ntp, 'nfp': nfp, 'nfn': nfn, 'fdr': fdr, 'tpr': tpr, 'nles': nb_les, 'nles_gt': nles_gt}
 
 
-    def roc(self, out_file, thresh):
+    def roc(self, out_file, thresh, nb_subjs):
         
 
         #subj, tp, x, y = self.__data_gen.get_next()
@@ -180,14 +181,9 @@ class BunetAnalyzer:
             #self.__model.restore(sess, tf.train.latest_checkpoint(self.__model_checkpoint))
             tf.global_variables_initializer()
             element = self.__data_gen.get_next()
+            self.__model.restore(sess, tf.train.latest_checkpoint(self.__model_checkpoint))
             if not os.path.isdir(self.__out_dir):
                 os.mkdir(self.__out_dir)
-            try:
-                while True:
-                    test, x, y, subj = sess.run(element)
-                    print(test)
-            except tf.errors.OutOfRangeError:
-                pass
             with open(join(self.__out_dir, out_file), 'w', newline='') as csvfile:
                 stats_writer = csv.writer(csvfile, delimiter=',')
                 stats_writer.writerow(['unc_thresh', 'mean_fdr', 'mean_tpr', 'mean_dice'])
@@ -195,66 +191,102 @@ class BunetAnalyzer:
                 nb_subj = 0
                 ustats = {}
                 [ustats.update({t: {'fdr': 0, 'tpr': 0, 'dice': 0}}) for t in thresh]
-                print("Length is ", self.__data_gen)
 
-                
-                print(sess.run(element))
-              
-                x_mc = np.repeat(x, self.__nb_mc, 0)
-                print('x shape', tf.shape(x_mc))
-                mu_mcs = sess.run(self.__model.predictor,
-                                      feed_dict={self.__model.x: x_mc, self.__model.keep_prob: 0.5})
-                mu_mcs = np.asarray(mu_mcs, np.float32)[..., 0]
-                ent = entropy(sigmoid(mu_mcs))
-                h = sigmoid(np.mean(mu_mcs, 0))
-                y = y[0, ..., 0]
-                for t in thresh:
-                    h_unc_thresh = self._keep_below_thresh(h, ent, t)
-                    stats = self._get_prd_stats(y, h_unc_thresh)
-                    ustats[t]['fdr'] += stats['fdr']['all']
-                    ustats[t]['tpr'] += stats['tpr']['all']
-                    ustats[t]['dice'] += stats['dice']
-                    nb_subj += 1
-                subj, tp, x, y = self.__data_gen.get_next()
-              
-                subj, tp, x, y = self.__data_gen.get_next()
-                x_mc = np.repeat(x, self.__nb_mc, 0)
-                mu_mcs = sess.run(self.__model.predictor,
-                                      feed_dict={self.__model.x: x_mc, self.__model.keep_prob: 0.5})
-                mu_mcs = np.asarray(mu_mcs, np.float32)[..., 0]
-                ent = entropy(sigmoid(mu_mcs))
-                h = sigmoid(np.mean(mu_mcs, 0))
-                y = y[0, ..., 0]
-                for t in thresh:
-                    h_unc_thresh = self._keep_below_thresh(h, ent, t)
-                    stats = self._get_prd_stats(y, h_unc_thresh)
-                    ustats[t]['fdr'] += stats['fdr']['all']
-                    ustats[t]['tpr'] += stats['tpr']['all']
-                    ustats[t]['dice'] += stats['dice']
-                    nb_subj += 1
+                nb_thrs = len(thresh)
+                fpr = np.empty((nb_subjs, nb_thrs))
+                tpr = np.empty((nb_subjs, nb_thrs))
+                fdr = np.empty((nb_subjs, nb_thrs))
+                fdr_lesions = np.empty((nb_subjs, nb_thrs))
+                tpr_lesions = np.empty((nb_subjs, nb_thrs))
+                fdr_lesions_s = np.empty((nb_subjs, nb_thrs))
+                tpr_lesions_s = np.empty((nb_subjs, nb_thrs))
+                fdr_lesions_m = np.empty((nb_subjs, nb_thrs))
+                tpr_lesions_m = np.empty((nb_subjs, nb_thrs))
+                fdr_lesions_l = np.empty((nb_subjs, nb_thrs))
+                tpr_lesions_l = np.empty((nb_subjs, nb_thrs))
 
-                batch_x, batch_y = sess.run([x, y])
+                i = 0
+                for sub in range(nb_subjs): # or try:
+                    subj, tp, img, y = sess.run(element)
 
-                for subj, tp, x, y in self.__data_gen:
-                    x_mc = np.repeat(x, self.__nb_mc, 0)
+                    x_mc = np.repeat(img, self.__nb_mc, 0)
+                    
                     mu_mcs = sess.run(self.__model.predictor,
-                                      feed_dict={self.__model.x: x_mc, self.__model.keep_prob: 0.5})
+                                        feed_dict={self.__model.x: x_mc, self.__model.keep_prob: 0.5})
                     mu_mcs = np.asarray(mu_mcs, np.float32)[..., 0]
-                    ent = entropy(sigmoid(mu_mcs))
+
+                    #ent = entropy(sigmoid(mu_mcs))
                     h = sigmoid(np.mean(mu_mcs, 0))
                     y = y[0, ..., 0]
-                    for t in thresh:
-                        h_unc_thresh = self._keep_below_thresh(h, ent, t)
-                        stats = self._get_prd_stats(y, h_unc_thresh)
-                        ustats[t]['fdr'] += stats['fdr']['all']
-                        ustats[t]['tpr'] += stats['tpr']['all']
-                        ustats[t]['dice'] += stats['dice']
-                    nb_subj += 1
-                    print('completed subject {}     {:.2f}m'.format(nb_subj, (timer() - start) / 60))
-                for t in thresh:
-                    stats_writer.writerow(
-                        [t, ustats[t]['fdr'] / nb_subj, ustats[t]['tpr'] / nb_subj, ustats[t]['dice'] / nb_subj])
-        print("completed in {:.2f}m".format((timer() - start) / 60))
+                    # Got prediction; now iterate through thresholds
+                    for j, t in enumerate(thresh):
+                        #h_unc_thresh = self._keep_below_thresh(h, ent, t)
+                        #stats = self._get_prd_stats(y, h_unc_thresh)
+                            
+                        import copy
+                
+                        a = copy.copy(h)
+                        b = copy.copy(y)
+
+                        lesion_stats = count_lesions(netseg=a.astype(np.float32), target=b.astype(np.int16), thresh=t)
+
+                        tpr_lesions[i, j] = lesion_stats['tpr']['all']
+                        fdr_lesions[i, j] = lesion_stats['fdr']['all']
+                
+                        tpr_lesions_s[i, j] = lesion_stats['tpr']['small']
+                        fdr_lesions_s[i, j] = lesion_stats['fdr']['small']
+                            
+                        tpr_lesions_m[i, j] = lesion_stats['tpr']['med']
+                        fdr_lesions_m[i, j] = lesion_stats['fdr']['med']
+                            
+                        tpr_lesions_l[i, j] = lesion_stats['tpr']['large']
+                        fdr_lesions_l[i, j] = lesion_stats['fdr']['large']
+
+                    i += 1
+                    if nb_subj % 5 == 0:
+                        print('completed subject {}     {:.2f}m'.format(i, (timer() - start) / 60))
+
+           
+            fdr_lesions_mean = np.mean(fdr_lesions, axis=0)
+            tpr_lesions_mean = np.mean(tpr_lesions, axis=0)
+            np.save('/usr/local/data/thomasc/outputs/fdr_lesions_mean.npy', fdr_lesions_mean)
+            np.save('/usr/local/data/thomasc/outputs/tpr_lesions_mean.npy', tpr_lesions_mean)
+                    
+            fdr_lesions_mean_s = np.mean(fdr_lesions_s, axis=0)
+            tpr_lesions_mean_s = np.mean(tpr_lesions_s, axis=0)
+            np.save('/usr/local/data/thomasc/outputs/fdr_lesions_mean_s.npy', fdr_lesions_mean_s)
+            np.save('/usr/local/data/thomasc/outputs/tpr_lesions_mean_s.npy', tpr_lesions_mean_s)
+
+            fdr_lesions_mean_m = np.mean(fdr_lesions_m, axis=0)
+            tpr_lesions_mean_m = np.mean(tpr_lesions_m, axis=0)
+            np.save('/usr/local/data/thomasc/outputs/fdr_lesions_mean_m.npy', fdr_lesions_mean_m)
+            np.save('/usr/local/data/thomasc/outputs/tpr_lesions_mean_m.npy', tpr_lesions_mean_m)
+
+            fdr_lesions_mean_l = np.mean(fdr_lesions_l, axis=0)
+            tpr_lesions_mean_l = np.mean(tpr_lesions_l, axis=0)
+            np.save('/usr/local/data/thomasc/outputs/fdr_lesions_mean_l.npy', fdr_lesions_mean_l)
+            np.save('/usr/local/data/thomasc/outputs/tpr_lesions_mean_l.npy', tpr_lesions_mean_l)
+
+            fig = plt.figure()
+            ax = fig.add_subplot(1, 1, 1)
+            plt.plot(fdr_lesions_mean, tpr_lesions_mean, label='lesion level-all')
+            plt.plot(fdr_lesions_mean_s, tpr_lesions_mean_s, label='lesion level-small')
+            plt.plot(fdr_lesions_mean_m, tpr_lesions_mean_m, label='lesion level-med')
+            plt.plot(fdr_lesions_mean_l, tpr_lesions_mean_l, label='lesion level-large') 
+            plt.legend(loc="lower right")
+            plt.xlabel('fdr')
+            plt.ylabel('tpr')
+            plt.title('Baseline U-Net Segmentation')
+            major_ticks = np.arange(0, 1, 0.1)
+            minor_ticks = np.arange(0, 1, 0.02)
+            ax.set_xticks(major_ticks)
+            ax.set_xticks(minor_ticks, minor=True)
+            ax.set_yticks(major_ticks)
+            ax.set_yticks(minor_ticks, minor=True)
+            ax.grid(which='both')
+            ax.grid(which='minor', alpha=0.2)
+            ax.grid(which='major', alpha=0.5)
+            fig.savefig(os.path.join('/usr/local/data/thomasc/outputs', "roc_curve_segmentation.png")) 
 
     def roc_sigmoid(self, out_file, thresh_start, thresh_stop, thresh_step):
         with tf.Session() as sess:
@@ -287,16 +319,23 @@ class BunetAnalyzer:
                         [t, ustats[t]['fdr'] / nb_subj, ustats[t]['tpr'] / nb_subj, ustats[t]['dice'] / nb_subj])
         print("completed in {:.2f}m".format((timer() - start) / 60))
 
-    def write_to_nrrd(self, out_dir, sess):
+    def write_to_nrrd(self, nb_subjs):
         with tf.Session() as sess:
             print('-----------Restoring from checkpoint------------')
+            tf.global_variables_initializer()
+            element = self.__data_gen.get_next()
             self.__model.restore(sess, tf.train.latest_checkpoint(self.__model_checkpoint))
+            if not os.path.isdir(self.__out_dir):
+                os.mkdir(self.__out_dir)
+            out_dir = self.__out_dir
             start = timer()
             nb_subj = 0
             print('-----------Starting predictions for each subject------------')
 
-            for subj, tp, x, y in self.__data_gen:
-                
+            for sub in range(nb_subjs):
+        
+                subj, tp, x, y = sess.run(element)
+
                 x_mc = np.repeat(x, self.__nb_mc, 0)
 
                 mu_mcs, log_var_mcs = sess.run([self.__model.predictor, self.__model.log_variance],
@@ -305,16 +344,16 @@ class BunetAnalyzer:
                 mu_mcs = []
                 log_var_mcs = []
 
-                #for i in range(0, self.__nb_mc):
-                #    mu_temp, log_temp = sess.run([self.__model.predictor, self.__model.log_variance],
-                #                                feed_dict={self.__model.x: x, self.__model.keep_prob: 0.5})
-                #    mu_mcs.append(mu_temp)
-                #    log_var_mcs.append(log_temp)
+                for i in range(0, self.__nb_mc):
+                   mu_temp, log_temp = sess.run([self.__model.predictor, self.__model.log_variance],
+                                               feed_dict={self.__model.x: x, self.__model.keep_prob: 0.5})
+                   mu_mcs.append(mu_temp)
+                   log_var_mcs.append(log_temp)
 
-                #mu_mcs = np.asarray(mu_mcs)
-                #log_var_mcs = np.asarray(log_var_mcs)
+                mu_mcs = np.asarray(mu_mcs)
+                log_var_mcs = np.asarray(log_var_mcs)
 
-                """
+
                 mu_mcs = mu_mcs[..., 0]
                 mu_mcs = np.squeeze(mu_mcs, axis=1)    
                 var_mcs = np.var(sigmoid(mu_mcs), 0)
@@ -330,7 +369,7 @@ class BunetAnalyzer:
                 h = h.astype(np.float32)
                 h[h < 0.00001] = 0
                 var_mcs = var_mcs.astype(np.float32)
-                """
+
 
                 # Here we clip at the threshold - it might be better not to clip and leave everything as the original sigmoid outputs
                 # Remove this line for no thresholding
@@ -342,23 +381,28 @@ class BunetAnalyzer:
                 flair = x[0, ..., 2]
                 pd = x[0, ..., 3]
 
-                subj = subj.eval(session=sess).decode('utf-8')
-                tp = tp.eval().decode('utf-8')
+                subj = str(subj[0])
+                print(subj)
+                tp = str(tp[0])
+                print(tp)
 
-                #nrrd.write(join(out_dir, subj[0] + '_' + tp[0] + '_uncmcvar.nrrd'), var_mcs, options=_OPTS) # unc measure, variance of mc samples
-                #nrrd.write(join(out_dir, subj[0] + '_' + tp[0] + '_t2.nrrd'), t2, options=_OPTS) # t2 mri on its own
+                #subj = subj.eval(session=sess).decode('utf-8')
+                #tp = tp.eval().decode('utf-8')
+
+                nrrd.write(join(out_dir, subj + '_' + tp+ '_uncmcvar.nrrd'), var_mcs, options=_OPTS) # unc measure, variance of mc samples
+                nrrd.write(join(out_dir, subj + '_' + tp + '_t2.nrrd'), t2, options=_OPTS) # t2 mri on its own
                 nrrd.write(join(out_dir, subj + '_' + tp + '_t1.nrrd'), t1, options=_OPTS) # t2 mri on its own
                 nrrd.write(join(out_dir, subj + '_' + tp + '_flair.nrrd'), flair, options=_OPTS) # t2 mri on its own
                 nrrd.write(join(out_dir, subj + '_' + tp + '_pdw.nrrd'), pd, options=_OPTS) # t2 mri on its own
                 # nrrd.write(join(out_dir, subj[0] + '_' + tp[0] + '_h.nrrd'), h, options=_OPTS) # don't use this
-                #nrrd.write(join(out_dir, subj[0] + '_' + tp[0] + '_target.nrrd'), y, options=_OPTS) # 'target' ground truth lesion labels
+                nrrd.write(join(out_dir, subj + '_' + tp + '_target.nrrd'), y, options=_OPTS) # 'target' ground truth lesion labels
                 #nrrd.write(join(out_dir, subj[0] + '_' + tp[0] + '_uncmi.nrrd'), mi, options=_OPTS) # mutual information unc. measure
                 #nrrd.write(join(out_dir, subj[0] + '_' + tp[0] + '_uncent.nrrd'), ent, options=_OPTS) # entropy uncertainty measure
                 #nrrd.write(join(out_dir, subj[0] + '_' + tp[0] + '_uncprvar.nrrd'), prd_var, options=_OPTS) # predicted variance unc. measure (2nd output of the model)
 
                 #h_mu_mcs = np.mean(sigmoid(mu_mcs), 0)
                 #h_mu_mcs = h_mu_mcs.astype(np.float32)
-                #nrrd.write(join(out_dir, subj[0] + '_' + tp[0] + '_netseg.nrrd'), h, options=_OPTS) # network's segmentation ( y_hat). Use this one!!
+                nrrd.write(join(out_dir, subj[0] + '_' + tp[0] + '_netseg.nrrd'), h, options=_OPTS) # network's segmentation ( y_hat). Use this one!!
                 # don't use this
                 # mu_nomcs = sess.run(self.__model.predictor, feed_dict={self.__model.x: x, self.__model.keep_prob: 1.0})
                 # h_nomcs = sigmoid(mu_nomcs)[0, ..., 0]

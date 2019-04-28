@@ -36,7 +36,7 @@ class Converter:
                                              #options=tf.python_io.TFRecordOptions(tf.python_io.TFRecordCompressionType.GZIP))
 
         # List all subjects except those from ascend
-        subjs = [i for i in listdir(self._data_dir) if not i.startswith('101')]
+        subjs = [i for i in listdir(self._data_dir) if not (i.startswith('101') or i.startswith('MBP'))]
         
         tps = [[subj,tp] for subj in subjs for tp in listdir(join(self._data_dir,subj)) if '.scannerdb' not in tp]
         count = 0
@@ -54,12 +54,20 @@ class Converter:
 
                     # Format subject name for saving ('109' denotes Confirm/Define (marked by 2); 'MSLAQ' denotes MSLAQ (marked by 1);
                     # 'MBP' denotes Maestro3 (marked by 3))
+                    # Format uniformly (timepoints)
+                    if tp == 'screening':
+                        save_tp = '00'
+                    elif tp == 'baseline':
+                        save_tp = '00'
+                    else:
+                        save_tp = tp[1:]
+
                     if subj.startswith('MS-LAQ'):
-                        save_subj = '1' + subj[15:21]
+                        save_subj = '1' + subj[15:21] + save_tp
                     elif subj.startswith('109'):
-                        save_subj = '2' + subj[17:20] + subj[21:24]
-                    elif subj.startswith('MBP'):
-                        save_subj = '3' + subj[18:21] + subj[22:25]
+                        save_subj = '2' + subj[17:20] + subj[21:24] + save_tp
+                    #elif subj.startswith('MBP'):
+                    #    save_subj = '3' + subj[18:21] + subj[22:25] + save_tp
                     else:
                         raise Error('Unknown subject type (unknown trial): ' + subj)
 
@@ -85,14 +93,6 @@ class Converter:
                         if (count+1) % 100 ==  0:
                             print('{} images complete {:.2f}m'.format(count+1,(timer()-start)/60) )
                         count += 1
-
-                        # Format uniformly (timepoints)
-                        if tp == 'screening':
-                            save_tp = '0'
-                        elif tp == 'baseline':
-                            save_tp = '0'
-                        else:
-                            save_tp = tp[1:]
 
                         try:
                             data_raw = data.tostring()

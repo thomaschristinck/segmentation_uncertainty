@@ -63,6 +63,3 @@ if __name__ == '__main__':
 python bunet_launcher.py -o /usr/local/data/thomasc/bunet_checkpoints/checkpoint_feb19_ab -c /usr/local/data/thomasc/bunet_checkpoints/checkpoint_feb19_ab/train_bunet.json
 python3 bunet_launcher.py -o /cim/data/mslaq_raw/checkpoint -c /cim/data/mslaq_raw/tf_unet/tf_unet/configs/train_bunet.json 
 '''
-
-# restore path for config:
-#/usr/local/data/thomasc/bunet_checkpoints/checkpoint_feb19_ab

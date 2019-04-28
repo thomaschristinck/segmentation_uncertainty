@@ -28,13 +28,7 @@ class BrainDataProvider:
         self._subjects = np.load(config.get('mni_resample_list', '/usr/local/data/thomasc/mni-resample/outputs/mni_resample_list.npy'))#'/cim/data/mslaq_raw/tf_mslaq/mslaq.npy')) #
         random.shuffle(self._subjects)
 
-        total_list = list(self._subjects)
-        train_subjects = np.load('/usr/local/data/thomasc/train.npy')
-        train_list = list(train_subjects)
-        test_list = [s for s in total_list if s not in train_list]
-        print('test list length: ', len(test_list))
-
-        nb_train = round(len(self._subjects) * 0.4)
+        nb_train = round(len(self._subjects) * 0.35)
         nb_valid = round(len(self._subjects) * 0.1)
        
       
@@ -46,7 +40,12 @@ class BrainDataProvider:
             non_train_array = np.asarray(self._subjects[nb_train:nb_train + nb_valid])
         elif self._mode == 'test':
             #self._subjects = self._subjects[nb_train + nb_valid:]
+            total_list = self._subjects
+            train_subjects = np.load('/usr/local/data/thomasc/mni-resample/outputs/train.npy')
+            train_list = list(train_subjects)
+            test_list = [s for s in total_list if s not in train_list]
             self._subjects = np.asarray(test_list)
+            self._length = len(self._subjects)
         self._subjects = tf.constant(np.asarray(self._subjects, np.int32))
     def __len__(self):
         return len(self._subjects)
@@ -90,6 +89,14 @@ class BrainDataProvider:
         label = self._process_data(label)
         return img, label
 
+    def _process(self, subj, tp, img, label):
+        img = tf.decode_raw(img, tf.float32)
+        label = tf.cast(tf.decode_raw(label, tf.int16), tf.float32)
+        img = tf.reshape(img, tf.stack([4, 64, 229, 193]))
+        label = tf.reshape(label, tf.stack([1, 64, 229, 193]))
+        img = self._process_data(img)  # [..., :-1]
+        label = self._process_data(label)
+        return subj, tp, img, label
 
     @abstractmethod
     def get_generator(self, batch_size, nb_epochs):
@@ -124,9 +131,10 @@ class BrainVolumeDataProvider(BrainDataProvider):
         """
         dataset = tf.data.TFRecordDataset([self._tfrecord])
         dataset = dataset.map(self._parse_tfrecord).filter(self._subj_filter)
+        dataset = dataset.map(self._process, num_parallel_calls=10)
         dataset = dataset.repeat(nb_epochs)
         dataset = dataset.batch(batch_size)
         dataset = dataset.prefetch(50)
         iterator = dataset.make_one_shot_iterator()
-    
+
         return iterator
